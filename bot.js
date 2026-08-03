@@ -89,7 +89,7 @@ app.get('/getkey', (req, res) => {
     res.redirect(WORK_INK_URL);
 });
 
-app.get('/success', (req, res) => {
+app.get(['/', '/success'], (req, res) => {
     // Generate a 24-hour key
     const newKey = `ONYX-${generateRandomString(6)}-${generateRandomString(6)}-${generateRandomString(6)}`;
     
