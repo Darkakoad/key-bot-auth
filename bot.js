@@ -82,7 +82,7 @@ function generateRandomString(length) {
 }
 
 // Work.ink Flow Routes
-const WORK_INK_URL = "YOUR_WORK_INK_LINK_HERE"; // He will replace this with his real link
+const WORK_INK_URL = "https://work.ink/2O4t/key"; // His real work.ink link
 
 app.get('/getkey', (req, res) => {
     // Redirect the user to the Work.ink link
