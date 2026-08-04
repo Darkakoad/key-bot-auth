@@ -50,26 +50,9 @@ app.get('/api/check-key', (req, res) => {
             }
         }
         
-        // Key exists, check HWID binding
-        if (!row.hwid) {
-            // First time use: bind the HWID
-            db.run("UPDATE keys SET hwid = ? WHERE key = ?", [hwid, key], (updateErr) => {
-                if (updateErr) {
-                    return res.status(500).json({ valid: false, error: "Failed to bind HWID" });
-                }
-                console.log(`[AUTH] Key ${key} bound to HWID: ${hwid}`);
-                return res.status(200).json({ valid: true });
-            });
-        } else {
-            // Key is already bound, verify HWID matches
-            if (row.hwid === hwid) {
-                console.log(`[AUTH] Successful login for key ${key}`);
-                return res.status(200).json({ valid: true });
-            } else {
-                console.log(`[AUTH] HWID Mismatch for key ${key}`);
-                return res.status(200).json({ valid: false, error: "HWID Mismatch." });
-            }
-        }
+        // Key exists and is valid
+        console.log(`[AUTH] Successful login for key ${key}`);
+        return res.status(200).json({ valid: true });
     });
 });
 
