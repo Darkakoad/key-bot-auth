@@ -75,7 +75,11 @@ app.get('/getkey', (req, res) => {
 });
 
 app.get(['/', '/success'], (req, res) => {
-    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+    let clientIp = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+    // If multiple IPs are forwarded, just take the first one (the actual client)
+    if (clientIp.includes(',')) {
+        clientIp = clientIp.split(',')[0].trim();
+    }
     
     // Check if this IP already generated a key in the last 24 hours
     db.get("SELECT key, expires_at FROM keys WHERE generator_ip = ? AND expires_at > datetime('now')", [clientIp], (err, row) => {
