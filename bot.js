@@ -7,7 +7,9 @@ const path = require('path');
 // 1. Setup SQLite Database
 const db = new sqlite3.Database(path.join(__dirname, 'keys.db'));
 db.serialize(() => {
-    db.run("CREATE TABLE IF NOT EXISTS keys (key TEXT PRIMARY KEY, hwid TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME)");
+    db.run("CREATE TABLE IF NOT EXISTS keys (key TEXT PRIMARY KEY, hwid TEXT, generator_ip TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME)");
+    // Try to add the column if the table already exists from an older version
+    db.run("ALTER TABLE keys ADD COLUMN generator_ip TEXT", (err) => { /* ignore error if column exists */ });
 });
 
 // 2. Setup Express Web Server
@@ -90,32 +92,56 @@ app.get('/getkey', (req, res) => {
 });
 
 app.get(['/', '/success'], (req, res) => {
-    // Generate a 24-hour key
-    const newKey = `ONYX-${generateRandomString(6)}-${generateRandomString(6)}-${generateRandomString(6)}`;
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
     
-    // Set expiration to 24 hours from now
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24);
-    const expiresStr = expiresAt.toISOString();
-
-    db.run("INSERT INTO keys (key, hwid, expires_at) VALUES (?, NULL, ?)", [newKey, expiresStr], (err) => {
+    // Check if this IP already generated a key in the last 24 hours
+    db.get("SELECT key, expires_at FROM keys WHERE generator_ip = ? AND expires_at > datetime('now')", [clientIp], (err, row) => {
         if (err) {
             console.error(err);
-            return res.send("<h1>Database error generating key.</h1>");
+            return res.send("<h1>Database error checking IP.</h1>");
         }
         
-        // Display the key to the user
-        res.send(`
-            <body style="background-color: #0f0f13; color: white; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh;">
-                <h2 style="color: #4a90e2;">Your 24-Hour Key</h2>
-                <div style="background: #1c1c24; padding: 20px; border-radius: 8px; font-size: 24px; border: 1px solid #333;">
-                    ${newKey}
-                </div>
-                <p style="color: #888; margin-top: 20px;">Copy this key and paste it into the loader.</p>
-                <p style="color: #ff4a4a;">Note: This key will expire in exactly 24 hours.</p>
-            </body>
-        `);
-        console.log(`[WEB] Generated 24-hour key via ad link: ${newKey}`);
+        if (row) {
+            // User already has an active key, show them their existing one
+            return res.send(`
+                <body style="background-color: #0f0f13; color: white; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh;">
+                    <h2 style="color: #4a90e2;">Your Active 24-Hour Key</h2>
+                    <div style="background: #1c1c24; padding: 20px; border-radius: 8px; font-size: 24px; border: 1px solid #333;">
+                        ${row.key}
+                    </div>
+                    <p style="color: #888; margin-top: 20px;">You already generated a key. Copy this key and paste it into the loader.</p>
+                    <p style="color: #ff4a4a;">Note: Your key expires at ${new Date(row.expires_at).toLocaleString()}.</p>
+                </body>
+            `);
+        }
+
+        // Generate a 24-hour key
+        const newKey = `ONYX-${generateRandomString(6)}-${generateRandomString(6)}-${generateRandomString(6)}`;
+        
+        // Set expiration to 24 hours from now
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24);
+        const expiresStr = expiresAt.toISOString();
+
+        db.run("INSERT INTO keys (key, hwid, generator_ip, expires_at) VALUES (?, NULL, ?, ?)", [newKey, clientIp, expiresStr], (err) => {
+            if (err) {
+                console.error(err);
+                return res.send("<h1>Database error generating key.</h1>");
+            }
+            
+            // Display the key to the user
+            res.send(`
+                <body style="background-color: #0f0f13; color: white; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh;">
+                    <h2 style="color: #4a90e2;">Your 24-Hour Key</h2>
+                    <div style="background: #1c1c24; padding: 20px; border-radius: 8px; font-size: 24px; border: 1px solid #333;">
+                        ${newKey}
+                    </div>
+                    <p style="color: #888; margin-top: 20px;">Copy this key and paste it into the loader.</p>
+                    <p style="color: #ff4a4a;">Note: This key will expire in exactly 24 hours.</p>
+                </body>
+            `);
+            console.log(`[WEB] Generated 24-hour key via ad link for IP ${clientIp}: ${newKey}`);
+        });
     });
 });
 
